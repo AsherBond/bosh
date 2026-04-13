@@ -1,3 +1,4 @@
+require 'bosh/director/blobstore/uuid_validation'
 require 'bosh/director/compiled_package_requirement_generator'
 require 'digest/sha1'
 
@@ -131,6 +132,8 @@ module Bosh::Director
                 end
               end
 
+              validate_compiled_package_blobstore_id!(task_result['blobstore_id'])
+
               compiled_package = Models::CompiledPackage.create do |p|
                 p.package = package
                 p.stemcell_os = stemcell.os
@@ -157,6 +160,13 @@ module Bosh::Director
         end
 
         private
+
+        def validate_compiled_package_blobstore_id!(blobstore_id)
+          return if Blobstore::UuidValidation.valid_uuid?(blobstore_id)
+
+          raise PackageCompilationInvalidTaskBlobstoreId,
+                'Compilation task result contained an invalid blobstore object id'
+        end
 
         def validate_packages(instance_groups_to_compile)
           instance_groups_to_compile.each do |instance_group|

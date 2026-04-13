@@ -2737,10 +2737,14 @@ module Bosh::Director
 
             it 'uses the deployment from the URL when the YAML manifest names a different deployment' do
               manifest = YAML.dump('name' => 'other_deployment', 'releases' => [], 'instance_groups' => [])
+              expect_any_instance_of(DeploymentManager)
+                .to receive(:create_deployment) do |_, _, rewritten_manifest, *_|
+                expect(YAML.load(rewritten_manifest)).to include('name' => 'owned_deployment')
+                OpenStruct.new(id: 1)
+              end
               put '/owned_deployment/jobs/dea?state=recreate', manifest, { 'CONTENT_TYPE' => 'text/yaml' }
               expect(last_response.status).to eq(302)
             end
-
           end
 
           context 'PUT /:deployment/jobs/:job/:index_or_id' do

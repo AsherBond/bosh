@@ -1,3 +1,5 @@
+require 'bosh/director/blobstore/uuid_validation'
+
 module Bosh::Director
   module Blobstore
     class LocalClient < Client
@@ -52,6 +54,10 @@ module Bosh::Director
       private
 
       def object_file_path(oid)
+        unless UuidValidation.valid_uuid?(oid)
+          raise BlobstoreError, "invalid blobstore object id format: #{oid.inspect}"
+        end
+
         File.join(@blobstore_path, oid)
       end
     end

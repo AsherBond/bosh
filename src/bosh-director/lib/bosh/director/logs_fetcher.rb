@@ -1,3 +1,5 @@
+require 'bosh/director/blobstore/uuid_validation'
+
 module Bosh::Director
   class LogsFetcher
     # @param [Bosh::Director::EventLog::Log] event_log
@@ -40,6 +42,11 @@ module Bosh::Director
           if blobstore_id.nil?
             raise AgentTaskNoBlobstoreId,
                   "Agent didn't return a blobstore object id for packaged logs"
+          end
+
+          unless Blobstore::UuidValidation.valid_uuid?(blobstore_id)
+            raise AgentTaskInvalidBlobstoreId,
+                  "Agent didn't return a valid blobstore object id for packaged logs"
           end
         end
         sha_digest = fetch_logs_result['sha1']

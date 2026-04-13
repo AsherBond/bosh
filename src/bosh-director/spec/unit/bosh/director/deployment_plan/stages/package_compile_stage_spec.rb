@@ -247,6 +247,10 @@ module Bosh::Director
       end
     end
 
+    def stub_compiled_blobstore_id_for_package(package)
+      format('00000000-0000-4000-8000-%012x', package.id % 0x1000000000000)
+    end
+
     def compile_package_stub(args)
       name = args[2]
       dot = args[3].rindex('.')
@@ -261,7 +265,7 @@ module Bosh::Director
       {
         'result' => {
           'sha1' => "compiled #{package.id}",
-          'blobstore_id' => "blob #{package.id}",
+          'blobstore_id' => stub_compiled_blobstore_id_for_package(package),
         },
       }
     end
@@ -273,7 +277,7 @@ module Bosh::Director
 
       package = Models::Package.find(name: request['name'], version: version)
       expect(request['package_get_signed_url']).to eq("#{package.blobstore_id}-url")
-      expect(request['upload_signed_url']).to eq('putcompiled_id-url')
+      expect(request['upload_signed_url']).to eq('putcccccccc-cccc-4ccc-8ccc-cccccccccccc-url')
       expect(request['digest']).to eq(package.sha1)
 
       request['deps'].each do |_, spec|
@@ -293,7 +297,7 @@ module Bosh::Director
 
       package = Models::Package.find(name: request['name'], version: version)
       expect(request['package_get_signed_url']).to eq("#{package.blobstore_id}-url")
-      expect(request['upload_signed_url']).to eq('putcompiled_id-url')
+      expect(request['upload_signed_url']).to eq('putcccccccc-cccc-4ccc-8ccc-cccccccccccc-url')
       expect(request['digest']).to eq(package.sha1)
       expect(request['blobstore_headers']).to eq(key: 'value')
 
@@ -417,7 +421,7 @@ module Bosh::Director
       before do
         allow(blobstore).to receive(:headers).and_return({})
         allow(blobstore).to receive(:can_sign_urls?).and_return(true)
-        allow(blobstore).to receive(:generate_object_id).and_return('compiled_id')
+        allow(blobstore).to receive(:generate_object_id).and_return('cccccccc-cccc-4ccc-8ccc-cccccccccccc')
         allow(blobstore).to receive(:sign) do |oid, verb|
           "#{verb}#{oid}-url"
         end
@@ -574,10 +578,15 @@ module Bosh::Director
         allow(agent).to receive(:apply).with(initial_state)
         allow(agent).to receive(:compile_package) do |*args|
           name = args[2]
+          transitive_compile_blob_ids = {
+            'common' => '00000000-0000-4000-8000-0000000000c1',
+            'ruby' => '00000000-0000-4000-8000-0000000000c2',
+            'needs_ruby' => '00000000-0000-4000-8000-0000000000c3',
+          }
           {
             'result' => {
               'sha1' => "compiled.#{name}.sha1",
-              'blobstore_id' => "blob.#{name}.id",
+              'blobstore_id' => transitive_compile_blob_ids.fetch(name),
             },
           }
         end
@@ -604,7 +613,7 @@ module Bosh::Director
               'name' => 'common',
               'version' => '0.1-dev.1',
               'sha1' => 'compiled.common.sha1',
-              'blobstore_id' => 'blob.common.id',
+              'blobstore_id' => '00000000-0000-4000-8000-0000000000c1',
             },
           },
         ).ordered # immediate dependencies
@@ -618,7 +627,7 @@ module Bosh::Director
               'name' => 'ruby',
               'version' => '0.1-dev.1',
               'sha1' => 'compiled.ruby.sha1',
-              'blobstore_id' => 'blob.ruby.id',
+              'blobstore_id' => '00000000-0000-4000-8000-0000000000c2',
             },
           },
         ).ordered # immediate dependencies
@@ -739,7 +748,7 @@ module Bosh::Director
           {
             'result' => {
               'sha1' => "compiled #{package.id}",
-              'blobstore_id' => "blob #{package.id}",
+              'blobstore_id' => stub_compiled_blobstore_id_for_package(package),
             },
           }
         end

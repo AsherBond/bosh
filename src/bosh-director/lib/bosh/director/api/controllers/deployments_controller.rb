@@ -490,7 +490,11 @@ module Bosh::Director
           manifest_text = request.body.read
           manifest_hash = validate_manifest_yml(manifest_text)
 
-          manifest_hash['name'] = deployment.name if deployment
+          if deployment
+            manifest_hash['name'] = deployment.name
+            # ensure diff will show `name` from `deployment.name` and not manifest YAML
+            manifest_text = YAML.dump(manifest_hash)
+          end
 
           if deployment
             before_manifest = Manifest.load_from_model(deployment, resolve_interpolation: false)

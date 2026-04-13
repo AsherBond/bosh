@@ -38,11 +38,12 @@ module Bosh::Director
           end
 
           before { allow(AgentClient).to receive(:with_agent_id).with(instance.agent_id, instance.name).and_return(agent) }
-          let(:agent) { instance_double('Bosh::Director::AgentClient', fetch_logs: {'blobstore_id' => 'new-fake-blobstore-id'}) }
+          let(:agent) { instance_double('Bosh::Director::AgentClient', fetch_logs: {'blobstore_id' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001'}) }
 
           it 'cleans old log bundles' do
-            old_log_bundle = FactoryBot.create(:models_log_bundle, timestamp: Time.now - 12*24*60*60, blobstore_id: 'previous-fake-blobstore-id') # 12 days
-            expect(blobstore).to receive(:delete).with('previous-fake-blobstore-id')
+            old_log_bundle = FactoryBot.create(:models_log_bundle, timestamp: Time.now - (12*24*60*60), blobstore_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb001') # 12 days
+
+            expect(blobstore).to receive(:delete).with('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb001')
 
             fetch_logs.perform
 
@@ -51,8 +52,8 @@ module Bosh::Director
 
           context 'when deleting blob from blobstore fails' do
             it 'cleans the old log bundle if it was not found in the blobstore' do
-              old_log_bundle = FactoryBot.create(:models_log_bundle, timestamp: Time.now - 12*24*60*60, blobstore_id: 'previous-fake-blobstore-id') # 12 days
-              expect(blobstore).to receive(:delete).with('previous-fake-blobstore-id').and_raise(Bosh::Director::Blobstore::NotFound)
+              old_log_bundle = FactoryBot.create(:models_log_bundle, timestamp: Time.now - (12*24*60*60), blobstore_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb001') # 12 days
+              expect(blobstore).to receive(:delete).with('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb001').and_raise(Bosh::Director::Blobstore::NotFound)
 
               fetch_logs.perform
 
@@ -60,12 +61,12 @@ module Bosh::Director
             end
 
             it 'does not clean the old log bundle if any other error is returned' do
-              old_log_bundle = FactoryBot.create(:models_log_bundle, timestamp: Time.now - 12*24*60*60, blobstore_id: 'previous-fake-blobstore-id') # 12 days
-              expect(blobstore).to receive(:delete).with('previous-fake-blobstore-id').and_raise(Bosh::Director::Blobstore::NotImplemented)
+              old_log_bundle = FactoryBot.create(:models_log_bundle, timestamp: Time.now - (12*24*60*60), blobstore_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb001') # 12 days
+              expect(blobstore).to receive(:delete).with('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb001').and_raise(Bosh::Director::Blobstore::NotImplemented)
 
               fetch_logs.perform
 
-              new_log_bundle = Models::LogBundle.first(blobstore_id: 'new-fake-blobstore-id')
+              new_log_bundle = Models::LogBundle.first(blobstore_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001')
               expect(Models::LogBundle.all).to eq [old_log_bundle, new_log_bundle]
             end
           end
@@ -74,16 +75,16 @@ module Bosh::Director
             it 'asks agent to fetch logs and returns blobstore id' do
               expect(agent).to receive(:fetch_logs).
                   with('job', 'filter1,filter2').
-                  and_return('blobstore_id' => 'fake-blobstore-id')
+                  and_return('blobstore_id' => 'cccccccc-cccc-4ccc-8ccc-cccccccc0001')
 
-              expect(fetch_logs.perform).to eq('fake-blobstore-id')
+              expect(fetch_logs.perform).to eq('cccccccc-cccc-4ccc-8ccc-cccccccc0001')
             end
 
             it 'registers returned blobstore id as a log bundle' do
               expect(Models::LogBundle.all).to be_empty
 
               fetch_logs.perform
-              expect(Models::LogBundle.where(blobstore_id: 'new-fake-blobstore-id')).not_to be_empty
+              expect(Models::LogBundle.where(blobstore_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001')).not_to be_empty
             end
           end
 
@@ -139,21 +140,21 @@ module Bosh::Director
           allow(blobstore).to receive(:create).and_return('common-blobstore-id')
         end
 
-        let(:agent_1) { instance_double('Bosh::Director::AgentClient', fetch_logs: {'blobstore_id' => 'fake-blobstore-id-1'}) }
-        let(:agent_2) { instance_double('Bosh::Director::AgentClient', fetch_logs: {'blobstore_id' => 'fake-blobstore-id-2'}) }
+        let(:agent_1) { instance_double('Bosh::Director::AgentClient', fetch_logs: {'blobstore_id' => 'dddddddd-dddd-4ddd-8ddd-dddddddd0001'}) }
+        let(:agent_2) { instance_double('Bosh::Director::AgentClient', fetch_logs: {'blobstore_id' => 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0002'}) }
         let(:archiver) { Core::TarGzipper.new }
 
         context 'when temporary blob exists' do
           it 'should be deleted' do
-            expect(blobstore).to receive(:delete).with('fake-blobstore-id-1')
-            expect(blobstore).to receive(:delete).with('fake-blobstore-id-2')
+            expect(blobstore).to receive(:delete).with('dddddddd-dddd-4ddd-8ddd-dddddddd0001')
+            expect(blobstore).to receive(:delete).with('eeeeeeee-eeee-4eee-8eee-eeeeeeee0002')
             fetch_logs.perform
           end
 
           it 'should be not registered' do
             fetch_logs.perform
-            expect(Models::LogBundle.where(blobstore_id: 'fake-blobstore-id-1')).to be_empty
-            expect(Models::LogBundle.where(blobstore_id: 'fake-blobstore-id-2')).to be_empty
+            expect(Models::LogBundle.where(blobstore_id: 'dddddddd-dddd-4ddd-8ddd-dddddddd0001')).to be_empty
+            expect(Models::LogBundle.where(blobstore_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0002')).to be_empty
           end
         end
 

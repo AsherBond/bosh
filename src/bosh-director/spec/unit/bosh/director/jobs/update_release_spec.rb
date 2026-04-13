@@ -117,10 +117,16 @@ module Bosh::Director
       let(:release) { FactoryBot.create(:models_release, name: 'appcloud') }
       let(:manifest_packages) { nil }
       let(:manifest_jobs) { nil }
-      let(:status) { instance_double(Process::Status, exitstatus: 0) }
+      let(:status) { instance_double(Process::Status, exitstatus: 0, success?: true) }
 
       before do
-        allow(Open3).to receive(:capture3).and_return([nil, 'some error', status])
+        allow(Open3).to receive(:capture3).and_wrap_original do |m, *args|
+          if args[0] == 'tar'
+            m.call(*args)
+          else
+            [nil, 'some error', status]
+          end
+        end
         allow(job).to receive(:with_release_lock).and_yield
       end
 
@@ -173,7 +179,7 @@ module Bosh::Director
           end
 
           context 'when the digest does not match' do
-            let(:status) { instance_double(Process::Status, exitstatus: 1) }
+            let(:status) { instance_double(Process::Status, exitstatus: 1, success?: false) }
             let(:job_options) do
               { 'remote' => true, 'location' => 'release_location', 'sha1' => 'sha1:potato' }
             end
@@ -234,8 +240,8 @@ module Bosh::Director
 
       context 'when extracting release fails' do
         before do
-          result = Bosh::Common::Exec::Result.new('cmd', 'output', 1)
-          expect(Bosh::Common::Exec).to receive(:sh).and_return(result)
+          failed = instance_double(Process::Status, exitstatus: 1, success?: false)
+          allow(Open3).to receive(:capture3).and_return(['', 'tar failed', failed])
         end
 
         it 'raises an error' do
@@ -251,6 +257,26 @@ module Bosh::Director
           expect do
             job.perform
           end.to raise_exception(Bosh::Director::ReleaseInvalidArchive)
+        end
+      end
+
+
+      context 'when manifest contains an invalid package name' do
+        let(:manifest) do
+          {
+            'name' => 'appcloud',
+            'version' => release_version,
+            'jobs' => [],
+            'packages' => [
+              { 'name' => 'bad@pkg', 'version' => '1', 'sha1' => 'x' },
+            ],
+          }
+        end
+
+        it 'raises before processing packages' do
+          expect do
+            job.perform
+          end.to raise_error(Bosh::Director::ValidationInvalidValue, /package 1 name/)
         end
       end
 
@@ -361,10 +387,10 @@ module Bosh::Director
 
         let(:release_version) { 'bad-version' }
 
-        it 'raises an error ReleaseVersionInvalid' do
+        it 'rejects the release version under the stricter identifier rules' do
           expect do
             job.perform
-          end.to raise_error(Sequel::ValidationFailed)
+          end.to raise_error(Bosh::Director::ValidationInvalidValue, /release version/)
         end
       end
 

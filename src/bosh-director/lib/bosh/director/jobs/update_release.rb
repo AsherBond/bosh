@@ -1,4 +1,5 @@
 require 'pp' # for #pretty_inspect
+require 'open3'
 require 'securerandom'
 require 'bosh/version/release_version'
 
@@ -71,9 +72,10 @@ module Bosh::Director
       def extract_release
         release_dir = Dir.mktmpdir
 
-        result = Bosh::Common::Exec.sh("tar -C #{release_dir} -xf #{release_path} 2>&1", on_error: :return)
-        if result.failed?
-          logger.error("Failed to extract release archive '#{release_path}' into dir '#{release_dir}', tar returned #{result.exit_status}, output: #{result.output})")
+        out, err, status = Open3.capture3('tar', '-C', release_dir, '-xf', release_path)
+        combined = [out, err].map(&:to_s).join
+        if status.exitstatus != 0
+          logger.error("Failed to extract release archive '#{release_path}' into dir '#{release_dir}', tar returned #{status.exitstatus}, output: #{combined}")
           FileUtils.rm_rf(release_dir)
           raise ReleaseInvalidArchive, 'Extracting release archive failed. Check task debug log for details.'
         end
@@ -176,6 +178,29 @@ module Bosh::Director
 
         manifest_packages.each { |p| hash_string_vals(p, 'name', 'version', 'sha1') }
         manifest_jobs.each { |j| hash_string_vals(j, 'name', 'version', 'sha1') }
+
+        validate_manifest_release_identifiers!
+      end
+
+      def validate_manifest_release_identifiers!
+        validate_manifest_identifier!(@manifest['name'], 'release name')
+        validate_manifest_identifier!(@manifest['version'], 'release version')
+
+        manifest_packages.each_with_index do |p, i|
+          validate_manifest_identifier!(p['name'], "package #{i + 1} name")
+          validate_manifest_identifier!(p['version'], "package #{i + 1} version")
+        end
+
+        manifest_jobs.each_with_index do |j, i|
+          validate_manifest_identifier!(j['name'], "job #{i + 1} name")
+          validate_manifest_identifier!(j['version'], "job #{i + 1} version")
+        end
+      end
+
+      def validate_manifest_identifier!(value, label)
+        if !value.is_a?(String) || !Models::VALID_ID.match?(value)
+          raise ValidationInvalidValue, "Invalid #{label} in release manifest: #{value.inspect}"
+        end
       end
 
       # Replace values for keys in a hash with their to_s.

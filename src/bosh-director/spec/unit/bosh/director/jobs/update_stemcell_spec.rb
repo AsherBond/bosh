@@ -80,7 +80,13 @@ describe Bosh::Director::Jobs::UpdateStemcell do
 
       allow(event_log).to receive(:begin_stage).and_return(event_log_stage)
       allow(event_log_stage).to receive(:advance_and_track).and_yield [nil]
-      allow(Open3).to receive(:capture3).and_return([nil, 'some error', verify_multidigest_exit_status])
+      allow(Open3).to receive(:capture3).and_wrap_original do |m, *args|
+        if args[0] == 'tar'
+          m.call(*args)
+        else
+          [nil, 'some error', verify_multidigest_exit_status]
+        end
+      end
 
       allow(Bosh::Director::Config).to receive_message_chain(:current_job, :username).and_return(task.username)
       allow(Bosh::Director::Config).to receive_message_chain(:current_job, :task_id).and_return(task.id)
@@ -303,8 +309,14 @@ describe Bosh::Director::Jobs::UpdateStemcell do
       end
 
       it 'should fail if cannot extract stemcell' do
-        result = Bosh::Common::Exec::Result.new('cmd', 'output', 1)
-        expect(Bosh::Common::Exec).to receive(:sh).and_return(result)
+        bad_status = instance_double(Process::Status, exitstatus: 1)
+        expect(Open3).to receive(:capture3).and_wrap_original do |m, *args|
+          if args[0] == 'tar'
+            ['', 'tar failed', bad_status]
+          else
+            m.call(*args)
+          end
+        end
 
         expect do
           subject.perform

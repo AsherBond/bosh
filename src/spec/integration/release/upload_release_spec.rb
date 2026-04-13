@@ -116,7 +116,7 @@ describe 'upload release', type: :integration do
   it 'cannot upload malformed release', no_reset: true do
     release_filename = asset_path('release_invalid_checksum.tgz')
     out = bosh_runner.run("upload-release #{release_filename}", failure_expected: true)
-    expect(out).to match(/Error: version presence, version format/)
+    expect(out).to match(%r{Invalid package 1 version in release manifest: ""})
   end
 
   it 'marks releases that have uncommitted changes' do

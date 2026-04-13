@@ -2708,6 +2708,14 @@ module Bosh::Director
           # dev-team-member has scopes ['bosh.teams.dev.admin']
           before { basic_authorize 'dev-team-member', 'dev-team-member' }
 
+          context 'POST /' do
+            it 'denies create when the manifest names an existing deployment on another team' do
+              manifest = YAML.dump('name' => 'other_deployment', 'releases' => [], 'instance_groups' => [])
+              post '/', manifest, { 'CONTENT_TYPE' => 'text/yaml' }
+              expect(last_response.status).to eq(401)
+            end
+          end
+
           context 'GET /:deployment/jobs/:job/:index_or_id' do
             it 'allows access to owned deployment' do
               expect(get('/owned_deployment/jobs/dea/0').status).to eq(200)
@@ -2726,6 +2734,13 @@ module Bosh::Director
             it 'denies access to other deployment' do
               expect(put('/other_deployment/jobs/dea?state=running', nil, { 'CONTENT_TYPE' => 'text/yaml' }).status).to eq(401)
             end
+
+            it 'uses the deployment from the URL when the YAML manifest names a different deployment' do
+              manifest = YAML.dump('name' => 'other_deployment', 'releases' => [], 'instance_groups' => [])
+              put '/owned_deployment/jobs/dea?state=recreate', manifest, { 'CONTENT_TYPE' => 'text/yaml' }
+              expect(last_response.status).to eq(302)
+            end
+
           end
 
           context 'PUT /:deployment/jobs/:job/:index_or_id' do

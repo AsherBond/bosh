@@ -1,3 +1,5 @@
+require 'open3'
+
 module Bosh::Director
   module Jobs
     class UpdateRelease < BaseJob
@@ -186,9 +188,10 @@ module Bosh::Director
           end
 
           def validate_tgz(logger, tgz, desc)
-            result = Bosh::Common::Exec.sh("tar -tf #{tgz} 2>&1", on_error: :return)
-            if result.failed?
-              logger.error("Extracting #{desc} archive failed, tar returned #{result.exit_status}, output: #{result.output}")
+            out, err, status = Open3.capture3('tar', '-tf', tgz)
+            combined = [out, err].map(&:to_s).join
+            if status.exitstatus != 0
+              logger.error("Extracting #{desc} archive failed, tar returned #{status.exitstatus}, output: #{combined}")
               raise PackageInvalidArchive, "Extracting #{desc} archive failed. Check task debug log for details."
             end
           end

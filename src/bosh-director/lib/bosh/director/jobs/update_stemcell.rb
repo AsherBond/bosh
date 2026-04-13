@@ -1,5 +1,6 @@
 require 'securerandom'
 require 'yaml'
+require 'open3'
 
 module Bosh::Director
   module Jobs
@@ -46,11 +47,12 @@ module Bosh::Director
         track_and_log('Verifying remote stemcell') { verify_sha1 } if @stemcell_sha1
 
         track_and_log('Extracting stemcell archive') do
-          result = Bosh::Common::Exec.sh("tar -C #{stemcell_dir} -xf #{@stemcell_path} 2>&1", on_error: :return)
-          if result.failed?
+          out, err, status = Open3.capture3('tar', '-C', stemcell_dir, '-xf', @stemcell_path)
+          combined = [out, err].map(&:to_s).join
+          if status.exitstatus != 0
             logger.error("Extracting stemcell archive failed in dir #{stemcell_dir}, " \
-                         "tar returned #{result.exit_status}, " \
-                         "output: #{result.output}")
+                         "tar returned #{status.exitstatus}, " \
+                         "output: #{combined}")
             raise StemcellInvalidArchive, 'Extracting stemcell archive failed. Check task debug log for details.'
           end
         end

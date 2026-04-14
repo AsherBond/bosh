@@ -292,14 +292,14 @@ module Bosh::Director
 
       context 'when an IPv4 and IPv6 address have the same integer value and prefix' do
         it 'eql? returns false' do
-          ipv4 = IpAddrOrCidr.new('0.0.0.1/32')
-          ipv6 = IpAddrOrCidr.new('::1/128')
+          ipv4 = IpAddrOrCidr.new('0.0.0.0/32')
+          ipv6 = IpAddrOrCidr.new('::/32')
           expect(ipv4.eql?(ipv6)).to be false
         end
 
         it 'are stored as distinct elements in a Set' do
-          ipv4 = IpAddrOrCidr.new('0.0.0.1/32')
-          ipv6 = IpAddrOrCidr.new('::1/128')
+          ipv4 = IpAddrOrCidr.new('0.0.0.0/32')
+          ipv6 = IpAddrOrCidr.new('::/32')
           expect(Set.new([ipv4, ipv6]).size).to eq(2)
         end
       end

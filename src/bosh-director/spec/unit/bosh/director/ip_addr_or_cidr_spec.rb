@@ -278,6 +278,32 @@ module Bosh::Director
         end
       end
 
+      context 'when compared to a non-IpAddrOrCidr object' do
+        it 'eql? returns false for nil' do
+          a = IpAddrOrCidr.new('10.0.11.32/30')
+          expect(a.eql?(nil)).to be false
+        end
+
+        it 'eql? returns false for a String' do
+          a = IpAddrOrCidr.new('10.0.11.32/30')
+          expect(a.eql?('10.0.11.32/30')).to be false
+        end
+      end
+
+      context 'when an IPv4 and IPv6 address have the same integer value and prefix' do
+        it 'eql? returns false' do
+          ipv4 = IpAddrOrCidr.new('0.0.0.1/32')
+          ipv6 = IpAddrOrCidr.new('::1/128')
+          expect(ipv4.eql?(ipv6)).to be false
+        end
+
+        it 'are stored as distinct elements in a Set' do
+          ipv4 = IpAddrOrCidr.new('0.0.0.1/32')
+          ipv6 = IpAddrOrCidr.new('::1/128')
+          expect(Set.new([ipv4, ipv6]).size).to eq(2)
+        end
+      end
+
       context 'hash contract (eql? implies equal hash)' do
         it 'is satisfied for equal objects' do
           a = IpAddrOrCidr.new('192.168.1.0/24')

@@ -1,4 +1,5 @@
 require 'bosh/director/agent_message_converter'
+require 'bosh/director/blobstore/uuid_validation'
 
 module Bosh::Director
   class AgentClient
@@ -317,8 +318,10 @@ module Bosh::Director
 
       if exception['blobstore_id']
         blob = download_and_delete_blob(exception['blobstore_id'])
-        msg += "\n"
-        msg += blob.to_s
+        unless blob.nil?
+          msg += "\n"
+          msg += blob.to_s
+        end
       end
 
       msg
@@ -334,7 +337,7 @@ module Bosh::Director
         response['value']['result'].is_a?(Hash) &&
         (blob_id = response['value']['result']['compile_log_id'])
         compile_log = download_and_delete_blob(blob_id)
-        response['value']['result']['compile_log'] = compile_log
+        response['value']['result']['compile_log'] = compile_log unless compile_log.nil?
       end
     end
 
@@ -342,10 +345,19 @@ module Bosh::Director
     # @param [String] blob_id Blob id
     # @return [String] Blob contents
     def download_and_delete_blob(blob_id)
+      unless Blobstore::UuidValidation.valid_uuid?(blob_id)
+        @logger.warn(
+          "Skipping blob fetch for agent '#{@client_id}' (#{@instance_name}): object id is not a valid UUID",
+        )
+        return nil
+      end
+
       blob = @resource_manager.get_resource(blob_id)
       blob
     ensure
-      @resource_manager.delete_resource(blob_id)
+      if blob_id && Blobstore::UuidValidation.valid_uuid?(blob_id)
+        @resource_manager.delete_resource(blob_id)
+      end
     end
 
     def handle_message_with_retry(message_name, *args, &blk)

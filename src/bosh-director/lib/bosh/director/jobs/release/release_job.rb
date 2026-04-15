@@ -1,3 +1,5 @@
+require 'open3'
+
 module Bosh::Director
   class ReleaseJob
 
@@ -11,6 +13,8 @@ module Bosh::Director
     end
 
     def update
+      validate_job_meta_identifiers!
+
       unpack
 
       job_manifest = load_manifest
@@ -30,11 +34,11 @@ module Bosh::Director
 
       if job_model.blobstore_id
         begin
-          @logger.info("Deleting blob for job '#{name}/#{@version}' with blobstore_id '#{job_model.blobstore_id}'")
+          @logger.info("Deleting blob for job '#{name}/#{version}' with blobstore_id '#{job_model.blobstore_id}'")
           BlobUtil.delete_blob(job_model.blobstore_id)
           job_model.blobstore_id = nil
         rescue Bosh::Director::Blobstore::BlobstoreError => e
-          @logger.info("Error deleting blob for job '#{name}/#{@version}' with blobstore_id '#{job_model.blobstore_id}': #{e.inspect}")
+          @logger.info("Error deleting blob for job '#{name}/#{version}' with blobstore_id '#{job_model.blobstore_id}': #{e.inspect}")
         end
       end
 
@@ -48,13 +52,23 @@ module Bosh::Director
     def unpack
       FileUtils.mkdir_p(job_dir)
 
-      desc = "job '#{name}/#{@version}'"
-      result = Bosh::Common::Exec.sh("tar -C #{job_dir} -xf #{job_tgz} 2>&1", :on_error => :return)
-      if result.failed?
+      desc = "job '#{name}/#{version}'"
+      out, err, status = Open3.capture3('tar', '-C', job_dir, '-xf', job_tgz)
+      combined = [out, err].map(&:to_s).join
+      if status.exitstatus != 0
         @logger.error("Extracting #{desc} archive failed in dir #{job_dir}, " +
-          "tar returned #{result.exit_status}, " +
-          "output: #{result.output}")
+          "tar returned #{status.exitstatus}, " +
+          "output: #{combined}")
         raise JobInvalidArchive, "Extracting #{desc} archive failed. Check task debug log for details."
+      end
+    end
+
+    def validate_job_meta_identifiers!
+      if !@job_meta['name'].is_a?(String) || !Models::VALID_ID.match?(@job_meta['name'])
+        raise JobInvalidName, "Invalid job name in release manifest: #{@job_meta['name'].inspect}"
+      end
+      if !@job_meta['version'].is_a?(String) || !Models::VALID_ID.match?(@job_meta['version'])
+        raise ValidationInvalidValue, "Invalid job version in release manifest: #{@job_meta['version'].inspect}"
       end
     end
 
@@ -175,6 +189,10 @@ module Bosh::Director
 
     def name
       @job_meta['name']
+    end
+
+    def version
+      @job_meta['version']
     end
   end
 end

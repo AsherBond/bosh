@@ -92,9 +92,18 @@ module Bosh::Director
         expect(job_model.sha1).to eq('deadbeef')
       end
 
+
+      it 'rejects invalid job names before extracting the archive' do
+        malicious = job_meta.merge('name' => "x; echo pwned")
+        job = described_class.new(malicious, release_model, release_dir, double(:logger).as_null_object)
+
+        expect(Open3).not_to receive(:capture3)
+        expect { job.update }.to raise_error(JobInvalidName, /Invalid job name/)
+      end
+
       it 'should fail when it cannot extract job archive' do
-        result = Bosh::Common::Exec::Result.new('cmd', 'output', 1)
-        expect(Bosh::Common::Exec).to receive(:sh).and_return(result)
+        failed = instance_double(Process::Status, exitstatus: 1, success?: false)
+        expect(Open3).to receive(:capture3).with('tar', '-C', anything, '-xf', anything).and_return(['', 'tar failed', failed])
 
         expect { release_job.update }.to raise_error(JobInvalidArchive)
       end

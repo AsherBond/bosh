@@ -549,11 +549,12 @@ module Bosh::Director
     end
 
     it 'should handle exceptions' do
+      blob_uuid = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13'
       response = {
         'exception' => {
           'message' => 'test',
           'backtrace' => %w[a b c],
-          'blobstore_id' => 'deadbeef',
+          'blobstore_id' => blob_uuid,
         },
       }
 
@@ -561,8 +562,8 @@ module Bosh::Director
         .with('foo.bar', 'bar', expected_rpc_args, options).and_yield(response)
 
       rm = double(Bosh::Director::Api::ResourceManager)
-      expect(rm).to receive(:get_resource).with('deadbeef').and_return('an exception')
-      expect(rm).to receive(:delete_resource).with('deadbeef')
+      expect(rm).to receive(:get_resource).with(blob_uuid).and_return('an exception')
+      expect(rm).to receive(:delete_resource).with(blob_uuid)
       expect(Bosh::Director::Api::ResourceManager).to receive(:new).and_return(rm)
 
       client = AgentClient.new('foo', 'bar', 'foo_instance/1')
@@ -715,7 +716,31 @@ module Bosh::Director
     end
 
     describe 'handling compilation log' do
+      let(:compile_log_uuid) { 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }
+
       it 'should inject compile log into response' do
+        response = {
+          'value' => {
+            'result' => {
+              'compile_log_id' => compile_log_uuid,
+            },
+          },
+        }
+
+        expect(@nats_rpc).to receive(:send_request)
+          .with('foo.bar', 'bar', expected_rpc_args, options).and_yield(response)
+
+        rm = instance_double('Bosh::Director::Api::ResourceManager')
+        expect(rm).to receive(:get_resource).with(compile_log_uuid).and_return('blob')
+        expect(rm).to receive(:delete_resource).with(compile_log_uuid)
+        expect(Bosh::Director::Api::ResourceManager).to receive(:new).and_return(rm)
+
+        client = AgentClient.new('foo', 'bar', 'foo_instance/1')
+        value = client.baz(*test_args)
+        expect(value['result']['compile_log']).to eq('blob')
+      end
+
+      it 'does not fetch compile log when compile_log_id is not a UUID' do
         response = {
           'value' => {
             'result' => {
@@ -728,13 +753,13 @@ module Bosh::Director
           .with('foo.bar', 'bar', expected_rpc_args, options).and_yield(response)
 
         rm = instance_double('Bosh::Director::Api::ResourceManager')
-        expect(rm).to receive(:get_resource).with('cafe').and_return('blob')
-        expect(rm).to receive(:delete_resource).with('cafe')
+        expect(rm).not_to receive(:get_resource)
+        expect(rm).not_to receive(:delete_resource)
         expect(Bosh::Director::Api::ResourceManager).to receive(:new).and_return(rm)
 
         client = AgentClient.new('foo', 'bar', 'foo_instance/1')
         value = client.baz(*test_args)
-        expect(value['result']['compile_log']).to eq('blob')
+        expect(value['result']).not_to have_key('compile_log')
       end
     end
 
@@ -745,22 +770,38 @@ module Bosh::Director
       end
 
       it 'supports new style (Hash)' do
+        blob_uuid = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12'
         exception = {
           'message' => 'something happened',
           'backtrace' => ['in zbb.rb:35', 'in zbb.rb:26'],
-          'blobstore_id' => 'deadbeef',
+          'blobstore_id' => blob_uuid,
         }
 
         rm = instance_double('Bosh::Director::Api::ResourceManager')
         allow(Bosh::Director::Api::ResourceManager).to receive(:new).and_return(rm)
-        expect(rm).to receive(:get_resource).with('deadbeef')
+        expect(rm).to receive(:get_resource).with(blob_uuid)
                                             .and_return("Failed to compile: no such file 'zbb'")
-        expect(rm).to receive(:delete_resource).with('deadbeef')
+        expect(rm).to receive(:delete_resource).with(blob_uuid)
 
         expected_error = "something happened\nin zbb.rb:35\nin zbb.rb:26\nFailed to compile: no such file 'zbb'"
 
         client = AgentClient.new('foo', 'bar', 'foo_instance/1')
         expect(client.format_exception(exception)).to eq(expected_error)
+      end
+
+      it 'does not append blob content when blobstore_id is not a UUID' do
+        exception = {
+          'message' => 'something happened',
+          'blobstore_id' => 'deadbeef',
+        }
+
+        rm = instance_double('Bosh::Director::Api::ResourceManager')
+        allow(Bosh::Director::Api::ResourceManager).to receive(:new).and_return(rm)
+        expect(rm).not_to receive(:get_resource)
+        expect(rm).not_to receive(:delete_resource)
+
+        client = AgentClient.new('foo', 'bar', 'foo_instance/1')
+        expect(client.format_exception(exception)).to eq('something happened')
       end
     end
 

@@ -42,33 +42,35 @@ module Bosh::Director
         end
 
         context 'when the agent finds logs for that type and filters' do
+          let(:packaged_logs_blob_id) { '11111111-1111-4111-8111-111111111111' }
+
           it 'returns the blobstore ID' do
             expect(mock_agent).to receive(:fetch_logs).and_return(
-              'blobstore_id' => 'blobid1',
+              'blobstore_id' => packaged_logs_blob_id,
             )
 
             blob, sha = subject.fetch(mock_instance_model, 'some-log-type', filters)
-            expect(blob).to eq 'blobid1'
+            expect(blob).to eq packaged_logs_blob_id
             expect(sha).to be_nil
           end
 
           it 'returns the sha as well if the agent provides one' do
             expect(mock_agent).to receive(:fetch_logs).and_return(
-              'blobstore_id' => 'blobid1',
+              'blobstore_id' => packaged_logs_blob_id,
               'sha1' => 'sha1-digest',
             )
 
             blob, sha = subject.fetch(mock_instance_model, 'some-log-type', filters)
-            expect(blob).to eq 'blobid1'
+            expect(blob).to eq packaged_logs_blob_id
             expect(sha).to eq 'sha1-digest'
           end
 
           it 'registers the blob with the cleaner when marked persistent' do
             expect(mock_agent).to receive(:fetch_logs).and_return(
-              'blobstore_id' => 'blobid1',
+              'blobstore_id' => packaged_logs_blob_id,
             )
 
-            expect(log_bundles_cleaner).to receive(:register_blobstore_id).with('blobid1')
+            expect(log_bundles_cleaner).to receive(:register_blobstore_id).with(packaged_logs_blob_id)
 
             subject.fetch(mock_instance_model, 'some-log-type', filters, true)
           end
@@ -76,13 +78,12 @@ module Bosh::Director
 
         context 'when signed urls are available' do
           let(:signed_url) { 'https://signed-url.com' }
-          let(:blobstore_id) { 'blobstore_id' }
+          let(:blobstore_id) { '22222222-2222-4222-8222-222222222222' }
 
           before do
             allow(blobstore).to receive(:generate_object_id).and_return(blobstore_id)
             allow(blobstore).to receive(:headers).and_return({})
             allow(blobstore).to receive(:sign).with(blobstore_id, 'put').and_return(signed_url)
-            allow(SecureRandom).to receive(:uuid).and_return(blobstore_id)
           end
 
           context 'and are enabled' do
@@ -141,13 +142,25 @@ module Bosh::Director
 
             it 'falls back to fetching logs without signed url' do
               expect(mock_agent).to receive(:fetch_logs).and_return(
-                'blobstore_id' => 'blobid1',
+                'blobstore_id' => '11111111-1111-4111-8111-111111111111',
               )
 
               blob, sha = subject.fetch(mock_instance_model, 'some-log-type', filters)
-              expect(blob).to eq 'blobid1'
+              expect(blob).to eq '11111111-1111-4111-8111-111111111111'
               expect(sha).to be_nil
             end
+          end
+        end
+
+        context 'when the agent returns a non-UUID blobstore id without signed urls' do
+          it 'raises AgentTaskInvalidBlobstoreId' do
+            expect(mock_agent).to receive(:fetch_logs).and_return(
+              'blobstore_id' => 'not-a-uuid',
+            )
+
+            expect do
+              subject.fetch(mock_instance_model, 'some-log-type', filters)
+            end.to raise_error(AgentTaskInvalidBlobstoreId, /valid blobstore object id/)
           end
         end
 

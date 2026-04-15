@@ -287,6 +287,7 @@ module Bosh::Director
   AgentInvalidTaskResult = err(400011)
   AgentUnsupportedAction = err(400012)
   AgentUploadBlobUnableToOpenFile = err(400013)
+  AgentTaskInvalidBlobstoreId = err(400014)
 
   # Cloud check task errors
   CloudcheckTooManySimilarProblems = err(410001)
@@ -298,6 +299,7 @@ module Bosh::Director
   DnsInvalidCanonicalName = err(420001)
 
   # PackageCompilation
+  PackageCompilationInvalidTaskBlobstoreId = err(430004)
   PackageCompilationNotEnoughWorkersForReuse = err(430002)
   PackageCompilationNotFound = err(430003)
 

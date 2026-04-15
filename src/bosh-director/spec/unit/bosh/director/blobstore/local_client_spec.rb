@@ -4,6 +4,9 @@ module Bosh::Director::Blobstore
   describe LocalClient do
     subject { described_class.new(@options) }
 
+    let(:uuid_a) { 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }
+    let(:uuid_b) { 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12' }
+
     it_implements_base_client_interface
 
     before do
@@ -29,28 +32,38 @@ module Bosh::Director::Blobstore
 
       describe '#exists?' do
         it 'should return true if the object already exists' do
-          File.open(File.join(@tmp, 'foo'), 'w') do |fh|
+          File.open(File.join(@tmp, uuid_a), 'w') do |fh|
             fh.puts('bar')
           end
 
           client = LocalClient.new(@options)
-          expect(client.exists?('foo')).to be(true)
+          expect(client.exists?(uuid_a)).to be(true)
         end
 
         it "should return false if the object doesn't exists" do
           client = LocalClient.new(@options)
-          expect(client.exists?('foo')).to be(false)
+          expect(client.exists?(uuid_a)).to be(false)
         end
       end
 
       describe 'get' do
         it 'should retrive the correct contents' do
-          File.open(File.join(@tmp, 'foo'), 'w') do |fh|
+          File.open(File.join(@tmp, uuid_a), 'w') do |fh|
             fh.puts('bar')
           end
 
           client = LocalClient.new(@options)
-          expect(client.get('foo')).to eq("bar\n")
+          expect(client.get(uuid_a)).to eq("bar\n")
+        end
+
+        it 'rejects non-UUID object ids' do
+          expect { LocalClient.new(@options).get('foo') }.to raise_error(BlobstoreError, /invalid blobstore object id format/)
+        end
+
+        it 'rejects path traversal in object ids' do
+          expect do
+            LocalClient.new(@options).get('../../etc/passwd')
+          end.to raise_error(BlobstoreError, /invalid blobstore object id format/)
         end
       end
 
@@ -65,6 +78,7 @@ module Bosh::Director::Blobstore
 
           stored = File.new(File.join(@tmp, id)).readlines
           expect(stored).to eq(original)
+          expect(id).to match(UuidValidation::UUID_PATTERN)
         end
 
         it 'should store a string' do
@@ -74,25 +88,26 @@ module Bosh::Director::Blobstore
 
           stored = File.new(File.join(@tmp, id)).readlines
           expect(stored).to eq([string])
+          expect(id).to match(UuidValidation::UUID_PATTERN)
         end
 
-        it 'should accept object id suggestion' do
+        it 'should accept object id suggestion when it is a UUID' do
           client = LocalClient.new(@options)
           string = 'foobar'
 
-          id = client.create(string, 'foobar')
-          expect(id).to eq('foobar')
+          id = client.create(string, uuid_b)
+          expect(id).to eq(uuid_b)
 
           stored = File.new(File.join(@tmp, id)).readlines
           expect(stored).to eq([string])
         end
 
-        it 'should raise an error' do
+        it 'should raise an error when the suggested UUID is already used' do
           client = LocalClient.new(@options)
           string = 'foobar'
-          expect(client.create(string, 'foobar')).to eq('foobar')
+          expect(client.create(string, uuid_b)).to eq(uuid_b)
 
-          expect { client.create(string, 'foobar') }.to raise_error BlobstoreError
+          expect { client.create(string, uuid_b) }.to raise_error BlobstoreError
         end
       end
 
@@ -106,7 +121,8 @@ module Bosh::Director::Blobstore
         end
 
         it 'should not raise NotFound error when trying to delete a missing id' do
-          expect { LocalClient.new(@options).delete('missing') }.to_not raise_error
+          missing_uuid = '00000000-0000-4000-8000-000000000001'
+          expect { LocalClient.new(@options).delete(missing_uuid) }.to_not raise_error
         end
       end
 
@@ -120,4 +136,3 @@ module Bosh::Director::Blobstore
     end
   end
 end
-

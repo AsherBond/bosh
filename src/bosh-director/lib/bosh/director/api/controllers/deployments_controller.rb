@@ -67,6 +67,7 @@ module Bosh::Director
           options['manifest_text'] = manifest
         else
           manifest_hash = validate_manifest_yml(request.body.read)
+          manifest_hash['name'] = deployment.name
           manifest = YAML.dump(manifest_hash)
           teams = deployment.teams
           latest_cloud_configs = Models::Config.latest_set_for_teams('cloud', *teams)
@@ -112,6 +113,7 @@ module Bosh::Director
           options['manifest_text'] = manifest
         else
           manifest_hash = validate_manifest_yml(request.body.read)
+          manifest_hash['name'] = deployment.name
           manifest = YAML.dump(manifest_hash)
           teams = deployment.teams
           latest_cloud_configs = Models::Config.latest_set_for_teams('cloud', *teams)
@@ -440,9 +442,9 @@ module Bosh::Director
           end
         end
 
-        # since authorizer does not look at manifest payload for deployment name
         @deployment = Models::Deployment[name: deployment_name]
         if @deployment
+          @permission_authorizer.granted_or_raise(@deployment, :admin, token_scopes)
           teams = @deployment.teams
         else
           teams = Bosh::Director::Models::Team.transform_admin_team_scope_to_teams(token_scopes)
@@ -487,6 +489,12 @@ module Bosh::Director
         begin
           manifest_text = request.body.read
           manifest_hash = validate_manifest_yml(manifest_text)
+
+          if deployment
+            manifest_hash['name'] = deployment.name
+            # ensure diff will show `name` from `deployment.name` and not manifest YAML
+            manifest_text = YAML.dump(manifest_hash)
+          end
 
           if deployment
             before_manifest = Manifest.load_from_model(deployment, resolve_interpolation: false)

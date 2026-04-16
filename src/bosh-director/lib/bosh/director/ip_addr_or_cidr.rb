@@ -43,12 +43,32 @@ module Bosh
         end
       end
 
+      # Structural equality for use by +Set+ and +Hash+. Two instances are equal
+      # only if they share the same base address integer, prefix length, and
+      # address family. For example, +10.0.11.32/30+ and +10.0.11.32/32+ are NOT
+      # equal
+      #
+      # @param other [Object] the object to compare with
+      # @return [Boolean] +true+ if +other+ is an +IpAddrOrCidr+ with identical
+      #   address, prefix, and address family; +false+ otherwise
       def eql?(other)
-        self == other
+        other.is_a?(IpAddrOrCidr) &&
+          @ipaddr.to_i == other.to_i &&
+          @ipaddr.prefix == other.prefix &&
+          @ipaddr.ipv4? == other.ipv4?
       end
 
+      # Returns an integer hash value derived from the address integer, prefix
+      # length, and address family - the same three fields used by {#eql?}.
+      # Satisfies Ruby's contract: if +a.eql?(b)+ then +a.hash == b.hash+.
+      #
+      # @return [Integer] hash value for use by +Set+ and +Hash+
       def hash
-        @ipaddr.hash
+        [
+          @ipaddr.to_i,
+          @ipaddr.prefix,
+          @ipaddr.ipv4?,
+        ].hash
       end
 
       def count
